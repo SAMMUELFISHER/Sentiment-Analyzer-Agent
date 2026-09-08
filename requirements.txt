@@ -1,0 +1,13 @@
+langchain
+langchain-groq
+langgraph
+fastapi
+uvicorn[standard]
+pydantic
+python-dotenv
+pinecone-client
+streamlit
+requests
+pandas
+plotly
+click
