@@ -2,8 +2,8 @@ from typing import TypedDict
 
 from langgraph.graph import StateGraph, END
 
-from app.agent.schemas import SentimentAnalysis
-from app.agent.prompts import SYSTEM_PROMPT
+from app.agent.schema import SentimentAnalysis
+from app.agent.prompt import SYSTEM_PROMPT
 from app.agent.gateway import LLMGateway
 
 
