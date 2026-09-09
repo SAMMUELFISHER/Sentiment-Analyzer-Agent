@@ -5,7 +5,7 @@ import logging
 from langchain_groq import ChatGroq
 from langchain_core.messages import BaseMessage
 
-from app.agent.schemas import SentimentAnalysis
+from app.agent.schema import SentimentAnalysis
 
 
 logger = logging.getLogger(__name__)
