@@ -24,6 +24,7 @@ dependencies = [
     "pypdf>=6.17.0",
     "python-dotenv>=1.2.3",
     "python-multipart>=0.0.32",
+    "redis>=8.1.0",
     "requests>=2.34.2",
     "streamlit>=1.63.0",
     "uvicorn[standard]>=0.52.4",

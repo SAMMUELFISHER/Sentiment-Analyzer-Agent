@@ -1,69 +1,76 @@
 from typing import TypedDict
-from dotenv import load_dotenv
-from langchain_groq import ChatGroq 
+
 from langgraph.graph import StateGraph, END
 
-from app.agent.schema import SentimentAnalysis
-from app.agent.prompt import SYSTEM_PROMPT
+from app.agent.schemas import SentimentAnalysis
+from app.agent.prompts import SYSTEM_PROMPT
+from app.agent.gateway import LLMGateway
 
-load_dotenv()
+
+gateway = LLMGateway()
+
 
 class GraphState(TypedDict, total=False):
+
     transcript: str
+
     analysis: SentimentAnalysis
 
 
-llm = ChatGroq(
-    model="openai/gpt-oss-120b",
-    temperature=0
-)
+async def analyze_node(
+    state: GraphState,
+):
 
-structured_llm = llm.with_structured_output(SentimentAnalysis)
-
-
-def analyze_sentiment(state: GraphState):
     transcript = state["transcript"]
 
-    prompt = f"""
-{SYSTEM_PROMPT}
-
-PHONE CALL TRANSCRIPT:
+    messages = [
+        (
+            "system",
+            SYSTEM_PROMPT,
+        ),
+        (
+            "human",
+            f"""
+Analyze the following phone-call transcript:
 
 {transcript}
-"""
+""",
+        ),
+    ]
 
-    result = structured_llm.invoke(prompt)
+    result = await gateway.invoke(
+        messages
+    )
 
     return {
         "analysis": result
     }
 
 
-def build_graph():
+builder = StateGraph(GraphState)
 
-    graph = StateGraph(GraphState)
+builder.add_node(
+    "analyze",
+    analyze_node,
+)
 
-    graph.add_node(
-        "analyze_sentiment",
-        analyze_sentiment
-    )
+builder.set_entry_point(
+    "analyze"
+)
 
-    graph.set_entry_point("analyze_sentiment")
+builder.add_edge(
+    "analyze",
+    END,
+)
 
-    graph.add_edge(
-        "analyze_sentiment",
-        END
-    )
-
-    return graph.compile()
-
-
-sentiment_graph = build_graph()
+graph = builder.compile()
 
 
-def analyze_transcript(transcript: str) -> SentimentAnalysis:
+async def analyze_transcript(
+    transcript: str,
+) -> SentimentAnalysis:
 
-    result = sentiment_graph.invoke(
+    result = await graph.ainvoke(
         {
             "transcript": transcript
         }

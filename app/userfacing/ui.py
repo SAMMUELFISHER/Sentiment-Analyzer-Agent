@@ -1,5 +1,9 @@
 import os
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 import requests
 import streamlit as st
 import pandas as pd
@@ -8,26 +12,37 @@ import plotly.express as px
 
 BACKEND_URL = os.getenv(
     "BACKEND_URL",
-    "http://localhost:8000"
+    "http://localhost:8000",
 )
+
+
+APP_USERNAME = os.getenv(
+    "APP_USERNAME",
+    "admin",
+)
+
+
+APP_PASSWORD = os.getenv(
+    "APP_PASSWORD",
+    "admin123",
+)
+
+
+USER_ID = APP_USERNAME
 
 
 st.set_page_config(
     page_title="AI Sentiment Analyzer",
     page_icon="📞",
-    layout="wide"
+    layout="wide",
 )
 
 
-# ---------------------------------------------------------
-# Authentication
-# ---------------------------------------------------------
-
 def login():
 
-    st.title("📞 AI Sentiment Analyzer")
-
-    st.subheader("Login")
+    st.title(
+        "📞 AI Sentiment Analyzer"
+    )
 
     username = st.text_input(
         "Username"
@@ -35,30 +50,26 @@ def login():
 
     password = st.text_input(
         "Password",
-        type="password"
+        type="password",
     )
 
     if st.button(
         "Login",
-        use_container_width=True
+        use_container_width=True,
     ):
 
-        valid_username = os.getenv(
-            "APP_USERNAME",
-            "admin"
-        )
-
-        valid_password = os.getenv(
-            "APP_PASSWORD",
-            "admin123"
-        )
-
         if (
-            username == valid_username
-            and password == valid_password
+            username == APP_USERNAME
+            and password == APP_PASSWORD
         ):
 
-            st.session_state["authenticated"] = True
+            st.session_state[
+                "authenticated"
+            ] = True
+
+            st.session_state[
+                "user_id"
+            ] = username
 
             st.rerun()
 
@@ -70,7 +81,10 @@ def login():
 
 
 if "authenticated" not in st.session_state:
-    st.session_state["authenticated"] = False
+
+    st.session_state[
+        "authenticated"
+    ] = False
 
 
 if not st.session_state["authenticated"]:
@@ -80,39 +94,35 @@ if not st.session_state["authenticated"]:
     st.stop()
 
 
-# ---------------------------------------------------------
-# Header
-# ---------------------------------------------------------
-
-st.title("📞 AI Conversation Sentiment Analyzer")
+st.title(
+    "📞 AI Conversation Sentiment Analyzer"
+)
 
 st.caption(
-    "Upload a phone-call transcript and generate AI-powered "
-    "sentiment, emotions, conversation insights and KPIs."
+    "Analyze sentiment, emotions and "
+    "contact-center KPIs from a phone-call transcript."
 )
 
 
 if st.sidebar.button("Logout"):
 
-    st.session_state["authenticated"] = False
+    st.session_state[
+        "authenticated"
+    ] = False
 
     st.rerun()
 
 
-# ---------------------------------------------------------
-# File Upload
-# ---------------------------------------------------------
-
 uploaded_file = st.file_uploader(
     "Upload conversation transcript",
-    type=["txt"]
+    type=["txt"],
 )
 
 
 if uploaded_file is None:
 
     st.info(
-        "Upload a .txt conversation transcript to begin."
+        "Upload a .txt transcript to begin."
     )
 
     st.stop()
@@ -120,27 +130,23 @@ if uploaded_file is None:
 
 transcript = uploaded_file.read().decode(
     "utf-8",
-    errors="ignore"
+    errors="ignore",
 )
 
 
-with st.expander("View transcript"):
+with st.expander("View Transcript"):
 
     st.text_area(
-        "Conversation",
+        "Transcript",
         transcript,
-        height=300
+        height=300,
     )
 
-
-# ---------------------------------------------------------
-# Analyze
-# ---------------------------------------------------------
 
 if st.button(
     "🔍 Analyze Conversation",
     type="primary",
-    use_container_width=True
+    use_container_width=True,
 ):
 
     with st.spinner(
@@ -150,21 +156,57 @@ if st.button(
         try:
 
             response = requests.post(
+
                 f"{BACKEND_URL}/analyze",
+
                 json={
-                    "transcript": transcript
+                    "transcript": transcript,
+                    "user_id": st.session_state[
+                        "user_id"
+                    ],
                 },
-                timeout=180
+
+                timeout=120,
             )
 
-            response.raise_for_status()
+            if response.status_code == 429:
 
-            st.session_state["analysis"] = response.json()
+                st.warning(
+                    "Rate limit reached. "
+                    "Please wait and try again."
+                )
 
-        except requests.RequestException as exc:
+                st.stop()
+
+
+            if response.status_code != 200:
+
+                st.error(
+                    response.text
+                )
+
+                st.stop()
+
+
+            st.session_state[
+                "analysis"
+            ] = response.json()
+
+
+        except requests.exceptions.Timeout:
 
             st.error(
-                f"Backend error: {exc}"
+                "The AI service took too long "
+                "to respond. Please try again."
+            )
+
+            st.stop()
+
+
+        except requests.exceptions.RequestException as exc:
+
+            st.error(
+                f"Backend connection failed: {exc}"
             )
 
             st.stop()
@@ -175,33 +217,18 @@ if "analysis" not in st.session_state:
     st.stop()
 
 
-data = st.session_state["analysis"]
+data = st.session_state[
+    "analysis"
+]
 
+kpis = data["kpis"]
 
-# ---------------------------------------------------------
-# Overall Sentiment
-# ---------------------------------------------------------
 
 st.divider()
 
-st.header("🎯 Overall Sentiment")
-
-
-sentiment = data["overall_sentiment"]
-confidence = data["overall_confidence"]
-
-
-if sentiment == "Positive":
-
-    sentiment_icon = "😊"
-
-elif sentiment == "Negative":
-
-    sentiment_icon = "😠"
-
-else:
-
-    sentiment_icon = "😐"
+st.header(
+    "🎯 Overall Sentiment"
+)
 
 
 col1, col2, col3 = st.columns(3)
@@ -210,8 +237,8 @@ col1, col2, col3 = st.columns(3)
 with col1:
 
     st.metric(
-        "Overall Sentiment",
-        f"{sentiment_icon} {sentiment}"
+        "Sentiment",
+        data["overall_sentiment"],
     )
 
 
@@ -219,15 +246,15 @@ with col2:
 
     st.metric(
         "Confidence",
-        f"{confidence * 100:.1f}%"
+        f"{data['overall_confidence'] * 100:.1f}%",
     )
 
 
 with col3:
 
     st.metric(
-        "Customer Sentiment Score",
-        f"{data['kpis']['customer_sentiment_score']:.1f}/100"
+        "Sentiment Score",
+        f"{kpis['customer_sentiment_score']:.1f}/100",
     )
 
 
@@ -236,14 +263,9 @@ st.info(
 )
 
 
-# ---------------------------------------------------------
-# Sentiment Breakdown
-# ---------------------------------------------------------
-
-st.header("📊 Sentiment Breakdown")
-
-
-kpis = data["kpis"]
+st.header(
+    "📊 Sentiment Breakdown"
+)
 
 
 sentiment_df = pd.DataFrame(
@@ -251,13 +273,14 @@ sentiment_df = pd.DataFrame(
         "Sentiment": [
             "Positive",
             "Negative",
-            "Neutral"
+            "Neutral",
         ],
+
         "Percentage": [
             kpis["positive_percentage"],
             kpis["negative_percentage"],
-            kpis["neutral_percentage"]
-        ]
+            kpis["neutral_percentage"],
+        ],
     }
 )
 
@@ -266,109 +289,103 @@ fig = px.pie(
     sentiment_df,
     names="Sentiment",
     values="Percentage",
-    hole=0.45
-)
-
-
-fig.update_layout(
-    height=400
+    hole=0.4,
 )
 
 
 st.plotly_chart(
     fig,
-    use_container_width=True
+    use_container_width=True,
 )
 
 
-# ---------------------------------------------------------
-# KPI Dashboard
-# ---------------------------------------------------------
-
-st.header("📈 Call KPIs")
+st.header(
+    "📈 Call KPIs"
+)
 
 
-kpi_columns = st.columns(4)
+cols = st.columns(4)
 
 
-with kpi_columns[0]:
+with cols[0]:
 
     st.metric(
         "Customer Satisfaction",
-        f"{kpis['customer_satisfaction_indicator']:.1f}%"
+        f"{kpis['customer_satisfaction_indicator']:.1f}%",
     )
 
 
-with kpi_columns[1]:
+with cols[1]:
 
     st.metric(
         "Resolution",
-        f"{kpis['resolution_indicator']:.1f}%"
+        f"{kpis['resolution_indicator']:.1f}%",
     )
 
 
-with kpi_columns[2]:
+with cols[2]:
 
     st.metric(
         "Escalation Risk",
-        f"{kpis['escalation_risk']:.1f}%"
+        f"{kpis['escalation_risk']:.1f}%",
     )
 
 
-with kpi_columns[3]:
+with cols[3]:
 
     st.metric(
         "Frustration",
-        f"{kpis['frustration_score']:.1f}%"
+        f"{kpis['frustration_score']:.1f}%",
     )
 
 
-kpi_columns_2 = st.columns(4)
+cols = st.columns(4)
 
 
-with kpi_columns_2[0]:
+with cols[0]:
 
     st.metric(
         "Agent Empathy",
-        f"{kpis['empathy_score']:.1f}%"
+        f"{kpis['empathy_score']:.1f}%",
     )
 
 
-with kpi_columns_2[1]:
+with cols[1]:
 
     st.metric(
         "Agent Helpfulness",
-        f"{kpis['agent_helpfulness_score']:.1f}%"
+        f"{kpis['agent_helpfulness_score']:.1f}%",
     )
 
 
-with kpi_columns_2[2]:
+with cols[2]:
 
     st.metric(
         "Issue Resolved",
-        "Yes" if kpis["issue_resolved"] else "No"
+        "Yes"
+        if kpis["issue_resolved"]
+        else "No",
     )
 
 
-with kpi_columns_2[3]:
+with cols[3]:
 
     st.metric(
         "Escalation Required",
-        "Yes" if kpis["escalation_required"] else "No"
+        "Yes"
+        if kpis["escalation_required"]
+        else "No",
     )
 
 
-# ---------------------------------------------------------
-# Sentence-level sentiment
-# ---------------------------------------------------------
-
-st.header("📝 Sentence-Level Sentiment")
+st.header(
+    "📝 Sentence-Level Sentiment"
+)
 
 
-sentence_data = data["sentence_sentiments"]
-
-
-sentence_df = pd.DataFrame(sentence_data)
+sentence_df = pd.DataFrame(
+    data["sentence_sentiments"]
+)
 
 
 sentence_df["confidence"] = (
@@ -376,35 +393,20 @@ sentence_df["confidence"] = (
 ).round(1)
 
 
-sentence_df = sentence_df.rename(
-    columns={
-        "sentence": "Sentence",
-        "sentiment": "Sentiment",
-        "confidence": "Confidence %",
-        "reason": "Reason"
-    }
-)
-
-
 st.dataframe(
     sentence_df,
     use_container_width=True,
-    hide_index=True
+    hide_index=True,
 )
 
 
-# ---------------------------------------------------------
-# Emotion Detection
-# ---------------------------------------------------------
-
-st.header("🧠 Emotion Analysis")
-
-
-emotion_data = data["emotions"]
+st.header(
+    "🧠 Emotion Analysis"
+)
 
 
 emotion_df = pd.DataFrame(
-    emotion_data
+    data["emotions"]
 )
 
 
@@ -414,31 +416,24 @@ if not emotion_df.empty:
         emotion_df["confidence"] * 100
     ).round(1)
 
-    emotion_df = emotion_df.rename(
-        columns={
-            "emotion": "Emotion",
-            "confidence": "Confidence %"
-        }
-    )
 
     fig = px.bar(
         emotion_df,
-        x="Emotion",
-        y="Confidence %",
-        text="Confidence %"
+        x="emotion",
+        y="confidence",
+        text="confidence",
     )
+
 
     st.plotly_chart(
         fig,
-        use_container_width=True
+        use_container_width=True,
     )
 
 
-# ---------------------------------------------------------
-# Conversation Insights
-# ---------------------------------------------------------
-
-st.header("💡 Conversation Insights")
+st.header(
+    "💡 Conversation Insights"
+)
 
 
 col1, col2 = st.columns(2)
@@ -446,60 +441,47 @@ col1, col2 = st.columns(2)
 
 with col1:
 
-    st.subheader("Key Issues")
+    st.subheader(
+        "Key Issues"
+    )
 
-    for issue in data["key_issues"]:
+    for item in data["key_issues"]:
 
         st.write(
-            f"• {issue}"
+            f"• {item}"
         )
 
 
-    st.subheader("Positive Points")
+    st.subheader(
+        "Positive Points"
+    )
 
-    for point in data["positive_points"]:
+    for item in data["positive_points"]:
 
         st.write(
-            f"• {point}"
+            f"• {item}"
         )
 
 
 with col2:
 
-    st.subheader("Negative Points")
+    st.subheader(
+        "Negative Points"
+    )
 
-    for point in data["negative_points"]:
+    for item in data["negative_points"]:
 
         st.write(
-            f"• {point}"
+            f"• {item}"
         )
 
 
-    st.subheader("Recommendations")
+    st.subheader(
+        "Recommendations"
+    )
 
-    for recommendation in data["recommendations"]:
+    for item in data["recommendations"]:
 
         st.write(
-            f"• {recommendation}"
+            f"• {item}"
         )
-
-
-# ---------------------------------------------------------
-# Export
-# ---------------------------------------------------------
-
-st.header("⬇️ Export Analysis")
-
-
-export_df = sentence_df.to_csv(
-    index=False
-)
-
-
-st.download_button(
-    label="Download Sentence Analysis CSV",
-    data=export_df,
-    file_name="sentence_sentiment_analysis.csv",
-    mime="text/csv",
-    use_container_width=True
-)
