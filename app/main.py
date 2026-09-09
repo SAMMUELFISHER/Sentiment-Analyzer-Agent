@@ -14,6 +14,7 @@ from pydantic import BaseModel
 
 from app.agent.graph import analyze_transcript
 from app.agent.limiter import check_user_rate_limit
+from app.agent.limiter import redis
 
 
 app = FastAPI(
@@ -92,3 +93,14 @@ async def analyze(
     )
 
     return result.model_dump()
+
+
+@app.get("/redis-test")
+async def redis_test():
+    await redis.set("test_key", "hello", ex=60)
+    value = await redis.get("test_key")
+
+    return {
+        "redis_working": value == "hello",
+        "value": value,
+    }
